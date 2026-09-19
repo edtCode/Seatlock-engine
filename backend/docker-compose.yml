@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: seatlock
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: .
+    command: sh -c "npm run migrate"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/seatlock
+      DATABASE_SSL: 'false'
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    restart: unless-stopped
+    command: node src/server.js
+    ports:
+      - '4000:4000'
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/seatlock
+      DATABASE_SSL: 'false'
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: dev_access_secret_change_me_32_chars_min
+      JWT_REFRESH_SECRET: dev_refresh_secret_change_me_32_chars_min
+      ACCESS_TOKEN_EXPIRES_IN: 15m
+      REFRESH_TOKEN_EXPIRES_IN: 30d
+      RESERVATION_TTL_SECONDS: 300
+      PAYMENT_PROVIDER: mock
+      PAYMENT_SECRET: mock_payment_secret
+      PAYMENT_WEBHOOK_SECRET: mock_webhook_secret
+      CORS_ORIGIN: '*'
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: node src/worker.js
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/seatlock
+      DATABASE_SSL: 'false'
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: dev_access_secret_change_me_32_chars_min
+      JWT_REFRESH_SECRET: dev_refresh_secret_change_me_32_chars_min
+      RESERVATION_TTL_SECONDS: 300
+      PAYMENT_PROVIDER: mock
+      PAYMENT_SECRET: mock_payment_secret
+      PAYMENT_WEBHOOK_SECRET: mock_webhook_secret
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

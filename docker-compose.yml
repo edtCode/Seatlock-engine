@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    command: node src/server.js
+    ports:
+      - '4000:4000'
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build: ./backend
+    command: node src/worker.js
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - postgres
+      - redis
+
+  migrate:
+    build: ./backend
+    command: sh -c "npm run migrate"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/seatlock
+      DATABASE_SSL: 'false'
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: seatlock
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    # No host port mapping to avoid conflicts; services use Docker network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
