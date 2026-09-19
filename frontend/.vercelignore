@@ -1,0 +1,15 @@
+node_modules/
+.sites-runtime/
+.vercel/
+build/
+dist/
+.next/
+.turbo/
+.cache/
+.vite/
+.wrangler/
+.env
+.env.*
+*.log
+coverage/
+*.tsbuildinfo
